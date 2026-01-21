@@ -106,7 +106,9 @@ export default function ReportsPage() {
       // Calculate top products
       const productMap = new Map<string, { quantity: number; revenue: number }>()
       items?.forEach(item => {
-        const productName = (item.products as { name: string })?.name || 'Unknown'
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const productData = item.products as any
+        const productName = productData?.name || 'Unknown'
         const existing = productMap.get(productName) || { quantity: 0, revenue: 0 }
         productMap.set(productName, {
           quantity: existing.quantity + item.quantity,
@@ -120,14 +122,18 @@ export default function ReportsPage() {
         .slice(0, 5)
 
       // Format recent transactions
-      const recentTransactions = (transactions || []).slice(0, 10).map(tx => ({
-        id: tx.id,
-        invoice_number: tx.invoice_number,
-        customer_name: (tx.customers as { name: string })?.name || 'Unknown',
-        total_amount: tx.total_amount,
-        status: tx.status,
-        created_at: tx.created_at
-      }))
+      const recentTransactions = (transactions || []).slice(0, 10).map(tx => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const customerData = tx.customers as any
+        return {
+          id: tx.id,
+          invoice_number: tx.invoice_number,
+          customer_name: customerData?.name || 'Unknown',
+          total_amount: tx.total_amount,
+          status: tx.status,
+          created_at: tx.created_at
+        }
+      })
 
       setData({
         totalSales,
