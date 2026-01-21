@@ -72,7 +72,9 @@ export default function DashboardPage() {
         const debtByCustomer = new Map<string, { id: string; name: string; totalDebt: number }>()
         transactions?.forEach(t => {
           const customerId = t.customer_id
-          const customerName = (t.customers as { id: string; name: string })?.name || 'Unknown'
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const customerData = t.customers as any
+          const customerName = customerData?.name || 'Unknown'
           const debt = t.total_amount - t.paid_amount
           
           if (debtByCustomer.has(customerId)) {
