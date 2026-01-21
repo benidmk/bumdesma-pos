@@ -37,7 +37,6 @@ import { PackagePlus, Loader2, Plus, Package, History } from "lucide-react"
 interface Product {
   id: string
   name: string
-  sku: string
   stock: number
   category: string
 }
@@ -48,7 +47,7 @@ interface StockEntry {
   purchase_price: number
   notes: string | null
   created_at: string
-  products: { name: string; sku: string } | null
+  products: { name: string } | null
   users: { name: string } | null
 }
 
@@ -77,21 +76,40 @@ export default function StockInPage() {
     setLoading(true)
     try {
       // Fetch products
-      const { data: productsData } = await supabase
+      const { data: productsData, error: productsError } = await supabase
         .from('products')
-        .select('id, name, sku, stock, category')
+        .select('id, name, stock, category')
         .order('name')
+
+      console.log('Products fetch result:', { 
+        productsData, 
+        productsError,
+        errorDetails: productsError ? JSON.stringify(productsError) : 'none'
+      })
+      
+      if (productsError) {
+        console.error('Products error details:', JSON.stringify(productsError, null, 2))
+        toast.error('Gagal memuat produk')
+      }
 
       setProducts(productsData || [])
 
-      // Fetch stock entries
-      const { data: entriesData } = await supabase
-        .from('stock_entries')
-        .select('*, products(name, sku), users(name)')
-        .order('created_at', { ascending: false })
-        .limit(100)
+      // Fetch stock entries - wrap in try-catch since table might not exist yet
+      try {
+        const { data: entriesData, error: entriesError } = await supabase
+          .from('stock_entries')
+          .select('*, products(name), users(name)')
+          .order('created_at', { ascending: false })
+          .limit(100)
 
-      setEntries(entriesData || [])
+        if (entriesError) {
+          console.log('Stock entries error (might be expected if table not created):', entriesError)
+        } else {
+          setEntries(entriesData || [])
+        }
+      } catch (entriesErr) {
+        console.log('Stock entries table might not exist yet')
+      }
     } catch (error) {
       console.error('Error fetching data:', error)
       toast.error('Gagal memuat data')
@@ -220,7 +238,7 @@ export default function StockInPage() {
                     ) : (
                       products.map((product) => (
                         <SelectItem key={product.id} value={product.id}>
-                          {product.name} ({product.sku})
+                          {product.name}
                         </SelectItem>
                       ))
                     )}
@@ -403,10 +421,7 @@ export default function StockInPage() {
                           {formatDateTime(entry.created_at)}
                         </TableCell>
                         <TableCell>
-                          <div>
-                            <p className="font-medium">{productData?.name || 'Unknown'}</p>
-                            <p className="text-xs text-gray-400">{productData?.sku}</p>
-                          </div>
+                          <p className="font-medium">{productData?.name || 'Unknown'}</p>
                         </TableCell>
                         <TableCell className="text-center">
                           <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-sm font-medium text-green-700">
