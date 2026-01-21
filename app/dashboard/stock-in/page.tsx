@@ -209,20 +209,21 @@ export default function StockInPage() {
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="product">Pilih Produk *</Label>
+                <Label htmlFor="product">Pilih Produk * ({products.length} tersedia)</Label>
                 <Select value={selectedProductId} onValueChange={setSelectedProductId}>
                   <SelectTrigger>
                     <SelectValue placeholder="Pilih produk..." />
                   </SelectTrigger>
-                  <SelectContent>
-                    {products.map((product) => (
-                      <SelectItem key={product.id} value={product.id}>
-                        <div className="flex items-center gap-2">
-                          <span>{product.name}</span>
-                          <span className="text-xs text-gray-400">({product.sku})</span>
-                        </div>
-                      </SelectItem>
-                    ))}
+                  <SelectContent position="popper" className="z-[9999] max-h-60">
+                    {products.length === 0 ? (
+                      <div className="p-2 text-sm text-gray-500">Tidak ada produk</div>
+                    ) : (
+                      products.map((product) => (
+                        <SelectItem key={product.id} value={product.id}>
+                          {product.name} ({product.sku})
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
