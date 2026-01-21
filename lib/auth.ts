@@ -21,13 +21,6 @@ declare module "next-auth" {
   }
 }
 
-declare module "next-auth/jwt" {
-  interface JWT {
-    id: string
-    role: "admin" | "viewer"
-  }
-}
-
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
     CredentialsProvider({
@@ -74,15 +67,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id
-        token.role = user.role
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (token as any).id = user.id;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (token as any).role = (user as any).role
       }
       return token
     },
     async session({ session, token }) {
       if (token) {
-        session.user.id = token.id
-        session.user.role = token.role
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (session.user as any).id = (token as any).id;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (session.user as any).role = (token as any).role
       }
       return session
     }
