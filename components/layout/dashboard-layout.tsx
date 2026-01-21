@@ -18,6 +18,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import {
   LayoutDashboard,
   Package,
+  PackagePlus,
   Users,
   ShoppingCart,
   CreditCard,
@@ -31,6 +32,7 @@ import {
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Produk", href: "/dashboard/products", icon: Package },
+  { name: "Stok Masuk", href: "/dashboard/stock-in", icon: PackagePlus, adminOnly: true },
   { name: "Pelanggan", href: "/dashboard/customers", icon: Users },
   { name: "Kasir (POS)", href: "/dashboard/pos", icon: ShoppingCart, adminOnly: true },
   { name: "Pelunasan", href: "/dashboard/payments", icon: CreditCard, adminOnly: true },
