@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { signOut, useSession } from "next-auth/react"
 import { cn } from "@/lib/utils"
@@ -78,8 +79,13 @@ function SidebarContent() {
     <div className="flex h-full flex-col">
       {/* Logo */}
       <div className="flex h-16 items-center gap-3 border-b px-4">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 shadow-lg">
-          <Store className="h-5 w-5 text-white" />
+        <div className="relative h-10 w-10 overflow-hidden rounded-xl shadow-lg">
+          <Image
+            src="/logo.png"
+            alt="BUMDESMA Logo"
+            fill
+            className="object-cover"
+          />
         </div>
         <div>
           <h1 className="font-bold text-gray-900">BUMDESMA</h1>

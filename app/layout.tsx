@@ -10,8 +10,13 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "BUMDESMA POS - Sistem Pencatatan Yarnen",
+  title: "BUMDESMA POS",
   description: "Aplikasi pencatatan transaksi barang pertanian dengan sistem Yarnen (Bayar Panen)",
+  icons: {
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({

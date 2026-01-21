@@ -2,12 +2,13 @@
 
 import { useState } from "react"
 import { signIn } from "next-auth/react"
+import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2, Store } from "lucide-react"
+import { Loader2 } from "lucide-react"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -51,8 +52,14 @@ export default function LoginPage() {
 
       <Card className="w-full max-w-md mx-4 shadow-2xl border-0 bg-white/95 backdrop-blur">
         <CardHeader className="text-center space-y-4">
-          <div className="mx-auto w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg">
-            <Store className="w-8 h-8 text-white" />
+          <div className="mx-auto w-24 h-24 relative">
+             <Image
+              src="/logo.png"
+              alt="BUMDESMA Logo"
+              fill
+              className="object-contain"
+              priority
+            />
           </div>
           <div>
             <CardTitle className="text-2xl font-bold text-gray-900">BUMDESMA POS</CardTitle>
