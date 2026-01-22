@@ -18,6 +18,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import { toast } from "sonner"
 import { 
   ShoppingCart, 
@@ -46,6 +62,11 @@ export default function POSPage() {
   const [cart, setCart] = useState<CartItem[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [isCheckingOut, setIsCheckingOut] = useState(false)
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+  
+  // Customer search
+  const [customerSearch, setCustomerSearch] = useState("")
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
   
   // Receipt printing
   const [showReceipt, setShowReceipt] = useState(false)
@@ -79,6 +100,19 @@ export default function POSPage() {
     }
 
     fetchData()
+  }, [])
+
+  // Close customer dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as HTMLElement
+      if (!target.closest('.customer-combobox')) {
+        setShowCustomerDropdown(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
   // Add product to cart
@@ -137,8 +171,8 @@ export default function POSPage() {
   // Calculate total
   const cartTotal = cart.reduce((sum, item) => sum + item.subtotal, 0)
 
-  // Checkout
-  async function handleCheckout() {
+  // Show confirmation dialog
+  function handleCheckout() {
     if (!selectedCustomer) {
       toast.error('Pilih pelanggan terlebih dahulu')
       return
@@ -149,6 +183,13 @@ export default function POSPage() {
       return
     }
 
+    // Show confirmation dialog
+    setShowConfirmDialog(true)
+  }
+
+  // Checkout after confirmation
+  async function handleConfirmCheckout() {
+    setShowConfirmDialog(false)
     setIsCheckingOut(true)
 
     try {
@@ -158,7 +199,7 @@ export default function POSPage() {
       const { data: transaction, error: txError } = await supabase
         .from('transactions')
         .insert({
-          customer_id: selectedCustomer.id,
+          customer_id: selectedCustomer!.id,
           created_by: session?.user?.id,
           invoice_number: invoiceNumber,
           total_amount: cartTotal,
@@ -198,7 +239,7 @@ export default function POSPage() {
       // Prepare receipt data
       setLastInvoice({
         invoiceNumber,
-        customer: selectedCustomer,
+        customer: selectedCustomer!,
         items: [...cart],
         total: cartTotal,
         date: new Date()
@@ -262,29 +303,75 @@ export default function POSPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <Select
-                value={selectedCustomer?.id || ""}
-                onValueChange={(value) => {
-                  const customer = customers.find(c => c.id === value)
-                  setSelectedCustomer(customer || null)
-                }}
-              >
-                <SelectTrigger className="h-12">
-                  <SelectValue placeholder="Pilih nama petani/pelanggan..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {customers.map((customer) => (
-                    <SelectItem key={customer.id} value={customer.id}>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{customer.name}</span>
-                        {customer.phone && (
-                          <span className="text-gray-500">({customer.phone})</span>
-                        )}
+              <div className="relative customer-combobox">
+                <Input
+                  placeholder="Ketik nama pelanggan..."
+                  value={selectedCustomer ? selectedCustomer.name : customerSearch}
+                  onChange={(e) => {
+                    setCustomerSearch(e.target.value)
+                    setShowCustomerDropdown(true)
+                    if (selectedCustomer) setSelectedCustomer(null)
+                  }}
+                  onFocus={() => setShowCustomerDropdown(true)}
+                  className="h-12 pr-10"
+                />
+                {selectedCustomer ? (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1 h-10 w-10"
+                    onClick={() => {
+                      setSelectedCustomer(null)
+                      setCustomerSearch("")
+                      setShowCustomerDropdown(true)
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4 text-gray-400" />
+                  </Button>
+                ) : (
+                  <Search className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                )}
+                
+                {/* Dropdown Suggestions */}
+                {showCustomerDropdown && !selectedCustomer && (
+                  <div className="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {customers
+                      .filter(c => 
+                        c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+                        c.phone?.includes(customerSearch)
+                      )
+                      .slice(0, 10)
+                      .map((customer) => (
+                        <div
+                          key={customer.id}
+                          className="px-4 py-3 hover:bg-green-50 cursor-pointer border-b last:border-b-0 transition-colors"
+                          onClick={() => {
+                            setSelectedCustomer(customer)
+                            setCustomerSearch("")
+                            setShowCustomerDropdown(false)
+                          }}
+                        >
+                          <div className="font-medium text-gray-900">{customer.name}</div>
+                          {customer.phone && (
+                            <div className="text-sm text-gray-500">{customer.phone}</div>
+                          )}
+                          {customer.address && (
+                            <div className="text-xs text-gray-400 truncate">{customer.address}</div>
+                          )}
+                        </div>
+                      ))}
+                    {customers.filter(c => 
+                      c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+                      c.phone?.includes(customerSearch)
+                    ).length === 0 && (
+                      <div className="px-4 py-8 text-center text-gray-500">
+                        <User className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                        <p className="text-sm">Pelanggan tidak ditemukan</p>
                       </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    )}
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
 
@@ -437,6 +524,101 @@ export default function POSPage() {
           </Card>
         </div>
       </div>
+
+      {/* Confirmation Dialog */}
+      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2">
+              <AlertCircle className="h-6 w-6 text-orange-500" />
+              Konfirmasi Transaksi
+            </DialogTitle>
+            <DialogDescription>
+              Pastikan data transaksi sudah benar sebelum menyimpan. Data yang sudah disimpan tidak dapat diubah.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* Customer Info */}
+            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+              <div className="flex items-center gap-2 mb-2">
+                <User className="h-5 w-5 text-blue-600" />
+                <span className="font-semibold text-gray-700">Pelanggan</span>
+              </div>
+              <p className="text-lg font-bold text-gray-900">{selectedCustomer?.name}</p>
+              {selectedCustomer?.phone && (
+                <p className="text-sm text-gray-600">{selectedCustomer.phone}</p>
+              )}
+            </div>
+
+            {/* Items Summary */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Package className="h-5 w-5 text-gray-600" />
+                <span className="font-semibold text-gray-700">Barang yang Dibeli</span>
+              </div>
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50">
+                      <TableHead>Produk</TableHead>
+                      <TableHead className="text-center">Jumlah</TableHead>
+                      <TableHead className="text-right">Harga Satuan</TableHead>
+                      <TableHead className="text-right">Subtotal</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {cart.map((item) => (
+                      <TableRow key={item.product.id}>
+                        <TableCell className="font-medium">{item.product.name}</TableCell>
+                        <TableCell className="text-center">{item.quantity}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(item.product.sell_price)}</TableCell>
+                        <TableCell className="text-right font-semibold">{formatCurrency(item.subtotal)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+
+            {/* Total */}
+            <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+              <div className="flex justify-between items-center">
+                <span className="text-lg font-semibold text-gray-700">Total Keseluruhan</span>
+                <span className="text-2xl font-bold text-green-600">{formatCurrency(cartTotal)}</span>
+              </div>
+              <p className="text-sm text-gray-600 mt-1">Status: Piutang (Belum Dibayar)</p>
+            </div>
+          </div>
+
+          <DialogFooter className="flex gap-2 sm:gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowConfirmDialog(false)}
+              className="flex-1"
+            >
+              Batal
+            </Button>
+            <Button
+              onClick={handleConfirmCheckout}
+              disabled={isCheckingOut}
+              className="flex-1 bg-green-600 hover:bg-green-700"
+            >
+              {isCheckingOut ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Menyimpan...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Ya, Simpan Transaksi
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Receipt Print Modal */}
       {showReceipt && lastInvoice && (
