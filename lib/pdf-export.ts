@@ -186,3 +186,129 @@ export function exportDebtReportToPDF(data: {
   const fileName = `Laporan-Piutang-BUMDESMA-${now.toISOString().split('T')[0]}.pdf`
   doc.save(fileName)
 }
+
+// Sales Report Types
+interface SalesReportTransaction {
+  invoice_number: string
+  customer_name: string
+  items: Array<{ name: string; quantity: number; subtotal: number }>
+  total_amount: number
+  paid_amount: number
+  status: string
+  created_at: string
+}
+
+interface SalesReportData {
+  totalSales: number
+  totalPayments: number
+  totalOutstanding: number
+  transactionCount: number
+  transactions: SalesReportTransaction[]
+  periodLabel: string
+}
+
+// Export sales report to PDF
+export function exportSalesReportToPDF(data: SalesReportData) {
+  const doc = new jsPDF()
+  
+  // Header
+  doc.setFontSize(18)
+  doc.setFont('helvetica', 'bold')
+  doc.text('BUMDESMA', 105, 15, { align: 'center' })
+  
+  doc.setFontSize(14)
+  doc.setFont('helvetica', 'normal')
+  doc.text('Laporan Penjualan', 105, 23, { align: 'center' })
+  
+  // Period & Date
+  doc.setFontSize(10)
+  const now = new Date()
+  const dateStr = now.toLocaleDateString('id-ID', { 
+    weekday: 'long', 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+  doc.text(`Periode: ${data.periodLabel}`, 14, 35)
+  doc.text(`Tanggal Cetak: ${dateStr}`, 14, 41)
+  
+  // Summary metrics box
+  doc.setFillColor(245, 245, 245)
+  doc.rect(14, 48, 182, 28, 'F')
+  
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'bold')
+  doc.text('Ringkasan:', 18, 56)
+  
+  doc.setFont('helvetica', 'normal')
+  doc.text(`Total Penjualan: ${formatCurrency(data.totalSales)}`, 18, 63)
+  doc.text(`Jumlah Transaksi: ${data.transactionCount}`, 18, 70)
+  doc.text(`Total Pembayaran: ${formatCurrency(data.totalPayments)}`, 100, 63)
+  doc.text(`Piutang Tertunggak: ${formatCurrency(data.totalOutstanding)}`, 100, 70)
+  
+  // Transactions table with items detail
+  const tableData = data.transactions.map((tx, index) => {
+    // Format items list
+    const itemsList = tx.items.map(item => 
+      `${item.name} (${item.quantity}x)`
+    ).join(', ')
+    
+    const statusLabel = tx.status === 'paid' ? 'Lunas' :
+                        tx.status === 'partial' ? 'Sebagian' : 'Belum Lunas'
+    
+    return [
+      (index + 1).toString(),
+      tx.invoice_number,
+      tx.customer_name,
+      itemsList || '-',
+      formatCurrency(tx.total_amount),
+      statusLabel
+    ]
+  })
+  
+  autoTable(doc, {
+    startY: 82,
+    head: [['No', 'Invoice', 'Pelanggan', 'Barang yang Dibeli', 'Total', 'Status']],
+    body: tableData,
+    styles: {
+      fontSize: 8,
+      cellPadding: 3,
+    },
+    headStyles: {
+      fillColor: [34, 139, 34],
+      textColor: 255,
+      fontStyle: 'bold',
+    },
+    alternateRowStyles: {
+      fillColor: [250, 250, 250],
+    },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 10 },
+      1: { cellWidth: 28, fontSize: 7 },
+      2: { cellWidth: 30 },
+      3: { cellWidth: 60 },
+      4: { halign: 'right', cellWidth: 28 },
+      5: { halign: 'center', cellWidth: 22 },
+    },
+  })
+  
+  // Footer
+  const pageCount = doc.getNumberOfPages()
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i)
+    doc.setFontSize(8)
+    doc.setTextColor(128)
+    doc.text(
+      `Halaman ${i} dari ${pageCount} - BUMDESMA POS`,
+      105,
+      doc.internal.pageSize.height - 10,
+      { align: 'center' }
+    )
+  }
+  
+  // Save
+  const fileName = `Laporan-Penjualan-BUMDESMA-${now.toISOString().split('T')[0]}.pdf`
+  doc.save(fileName)
+}

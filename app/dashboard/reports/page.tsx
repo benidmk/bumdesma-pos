@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase"
 import { formatCurrency, formatDateTime, formatDate } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
   Select,
   SelectContent,
@@ -27,8 +28,21 @@ import {
   TrendingDown,
   DollarSign,
   Package,
-  FileText
+  FileText,
+  Download
 } from "lucide-react"
+import { exportSalesReportToPDF } from "@/lib/pdf-export"
+
+interface TransactionWithItems {
+  id: string
+  invoice_number: string
+  customer_name: string
+  items: Array<{ name: string; quantity: number; subtotal: number }>
+  total_amount: number
+  paid_amount: number
+  status: string
+  created_at: string
+}
 
 interface ReportData {
   totalSales: number
@@ -36,14 +50,8 @@ interface ReportData {
   totalOutstanding: number
   transactionCount: number
   topProducts: Array<{ name: string; quantity: number; revenue: number }>
-  recentTransactions: Array<{
-    id: string
-    invoice_number: string
-    customer_name: string
-    total_amount: number
-    status: string
-    created_at: string
-  }>
+  recentTransactions: TransactionWithItems[]
+  allTransactions: TransactionWithItems[]
 }
 
 export default function ReportsPage() {
@@ -69,10 +77,10 @@ export default function ReportsPage() {
         dateFilter = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
       }
 
-      // Fetch transactions
+      // Fetch transactions with transaction_items
       let transactionQuery = supabase
         .from('transactions')
-        .select('*, customers(name)')
+        .select('*, customers(name), transaction_items(quantity, subtotal, products(name))')
         .order('created_at', { ascending: false })
 
       if (dateFilter) {
@@ -121,15 +129,23 @@ export default function ReportsPage() {
         .sort((a, b) => b.revenue - a.revenue)
         .slice(0, 5)
 
-      // Format recent transactions
-      const recentTransactions = (transactions || []).slice(0, 10).map(tx => {
+      // Format all transactions with items
+      const allTransactions: TransactionWithItems[] = (transactions || []).map(tx => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const customerData = tx.customers as any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const txItems = (tx.transaction_items as any[]) || []
         return {
           id: tx.id,
           invoice_number: tx.invoice_number,
           customer_name: customerData?.name || 'Unknown',
+          items: txItems.map((item: { quantity: number; subtotal: number; products: { name: string } | null }) => ({
+            name: item.products?.name || 'Unknown',
+            quantity: item.quantity,
+            subtotal: item.subtotal
+          })),
           total_amount: tx.total_amount,
+          paid_amount: tx.paid_amount,
           status: tx.status,
           created_at: tx.created_at
         }
@@ -141,7 +157,8 @@ export default function ReportsPage() {
         totalOutstanding,
         transactionCount: transactions?.length || 0,
         topProducts,
-        recentTransactions
+        recentTransactions: allTransactions.slice(0, 10),
+        allTransactions
       })
     } catch (error) {
       console.error('Error fetching report data:', error)
@@ -167,17 +184,40 @@ export default function ReportsPage() {
           <p className="text-gray-500">Ringkasan penjualan dan piutang</p>
         </div>
         
-        <Select value={period} onValueChange={setPeriod}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Pilih Periode" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="today">Hari Ini</SelectItem>
-            <SelectItem value="week">7 Hari Terakhir</SelectItem>
-            <SelectItem value="month">Bulan Ini</SelectItem>
-            <SelectItem value="all">Semua Waktu</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex gap-3">
+          <Select value={period} onValueChange={setPeriod}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Pilih Periode" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="today">Hari Ini</SelectItem>
+              <SelectItem value="week">7 Hari Terakhir</SelectItem>
+              <SelectItem value="month">Bulan Ini</SelectItem>
+              <SelectItem value="all">Semua Waktu</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <Button
+            onClick={() => {
+              if (!data) return
+              const periodLabel = period === 'today' ? 'Hari Ini' :
+                                  period === 'week' ? '7 Hari Terakhir' :
+                                  period === 'month' ? 'Bulan Ini' : 'Semua Waktu'
+              exportSalesReportToPDF({
+                totalSales: data.totalSales,
+                totalPayments: data.totalPayments,
+                totalOutstanding: data.totalOutstanding,
+                transactionCount: data.transactionCount,
+                transactions: data.allTransactions,
+                periodLabel
+              })
+            }}
+            className="bg-green-600 hover:bg-green-700"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export PDF
+          </Button>
+        </div>
       </div>
 
       {/* Metric Cards */}
