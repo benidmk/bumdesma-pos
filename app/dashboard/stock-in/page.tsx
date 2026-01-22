@@ -32,7 +32,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { PackagePlus, Loader2, Plus, Package, History } from "lucide-react"
+import { PackagePlus, Loader2, Plus, Package, History, Search, Trash2 } from "lucide-react"
 
 interface Product {
   id: string
@@ -64,12 +64,29 @@ export default function StockInPage() {
   const [quantity, setQuantity] = useState("")
   const [purchasePrice, setPurchasePrice] = useState("")
   const [notes, setNotes] = useState("")
+  
+  // Product search
+  const [productSearch, setProductSearch] = useState("")
+  const [showProductDropdown, setShowProductDropdown] = useState(false)
 
   // Filter
   const [filterProduct, setFilterProduct] = useState("all")
 
   useEffect(() => {
     fetchData()
+  }, [])
+
+  // Close product dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as HTMLElement
+      if (!target.closest('.product-combobox')) {
+        setShowProductDropdown(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
   async function fetchData() {
@@ -228,22 +245,76 @@ export default function StockInPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="product">Pilih Produk * ({products.length} tersedia)</Label>
-                <Select value={selectedProductId} onValueChange={setSelectedProductId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih produk..." />
-                  </SelectTrigger>
-                  <SelectContent position="popper" className="z-[9999] max-h-60">
-                    {products.length === 0 ? (
-                      <div className="p-2 text-sm text-gray-500">Tidak ada produk</div>
-                    ) : (
-                      products.map((product) => (
-                        <SelectItem key={product.id} value={product.id}>
-                          {product.name}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
+                <div className="relative product-combobox">
+                  <Input
+                    placeholder="Ketik nama produk..."
+                    value={selectedProduct ? selectedProduct.name : productSearch}
+                    onChange={(e) => {
+                      setProductSearch(e.target.value)
+                      setShowProductDropdown(true)
+                      if (selectedProductId) setSelectedProductId("")
+                    }}
+                    onFocus={() => setShowProductDropdown(true)}
+                    className="pr-10"
+                  />
+                  {selectedProduct ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1 h-8 w-8"
+                      onClick={() => {
+                        setSelectedProductId("")
+                        setProductSearch("")
+                        setShowProductDropdown(true)
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4 text-gray-400" />
+                    </Button>
+                  ) : (
+                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  )}
+                  
+                  {/* Dropdown Suggestions */}
+                  {showProductDropdown && !selectedProductId && (
+                    <div className="absolute z-[9999] w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                      {products.length === 0 ? (
+                        <div className="px-4 py-8 text-center text-gray-500">
+                          <Package className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                          <p className="text-sm">Tidak ada produk</p>
+                        </div>
+                      ) : (
+                        products
+                          .filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase()))
+                          .slice(0, 10)
+                          .map((product) => (
+                            <div
+                              key={product.id}
+                              className="px-4 py-3 hover:bg-green-50 cursor-pointer border-b last:border-b-0 transition-colors"
+                              onClick={() => {
+                                setSelectedProductId(product.id)
+                                setProductSearch("")
+                                setShowProductDropdown(false)
+                              }}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <div className="font-medium text-gray-900">{product.name}</div>
+                                  <div className="text-xs text-gray-500">Stok saat ini: {product.stock} unit</div>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                      )}
+                      {products.filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase())).length === 0 && products.length > 0 && (
+                        <div className="px-4 py-8 text-center text-gray-500">
+                          <Package className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                          <p className="text-sm">Produk tidak ditemukan</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {selectedProduct && (
