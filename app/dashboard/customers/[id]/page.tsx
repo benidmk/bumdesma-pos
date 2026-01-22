@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, use } from "react"
+import React, { useEffect, useState, use } from "react"
 import { supabase } from "@/lib/supabase"
 import { Customer, Transaction } from "@/lib/types"
 import { formatCurrency, formatDateTime } from "@/lib/utils"
@@ -21,15 +21,29 @@ import {
   Phone,
   MapPin,
   Loader2,
-  FileText
+  FileText,
+  ChevronDown,
+  ChevronRight,
+  Package
 } from "lucide-react"
 import Link from "next/link"
+
+interface TransactionWithItems extends Transaction {
+  transaction_items?: Array<{
+    id: string
+    quantity: number
+    unit_price: number
+    subtotal: number
+    products: { name: string } | null
+  }>
+}
 
 export default function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const [customer, setCustomer] = useState<Customer | null>(null)
-  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [transactions, setTransactions] = useState<TransactionWithItems[]>([])
   const [loading, setLoading] = useState(true)
+  const [expandedTransactions, setExpandedTransactions] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     async function fetchData() {
@@ -44,10 +58,10 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
         if (customerError) throw customerError
         setCustomer(customerData)
 
-        // Fetch transactions
+        // Fetch transactions with items
         const { data: transactionsData, error: transactionsError } = await supabase
           .from('transactions')
-          .select('*')
+          .select('*, transaction_items(id, quantity, unit_price, subtotal, products(name))')
           .eq('customer_id', id)
           .order('created_at', { ascending: false })
 
@@ -87,6 +101,18 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
     .reduce((sum, t) => sum + (t.total_amount - t.paid_amount), 0)
 
   const totalTransactionValue = transactions.reduce((sum, t) => sum + t.total_amount, 0)
+
+  const toggleExpanded = (transactionId: string) => {
+    setExpandedTransactions(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(transactionId)) {
+        newSet.delete(transactionId)
+      } else {
+        newSet.add(transactionId)
+      }
+      return newSet
+    })
+  }
 
   return (
     <div className="space-y-6">
@@ -156,8 +182,10 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12"></TableHead>
                     <TableHead>No. Invoice</TableHead>
                     <TableHead>Tanggal</TableHead>
+                    <TableHead>Barang</TableHead>
                     <TableHead className="text-right">Total</TableHead>
                     <TableHead className="text-right">Dibayar</TableHead>
                     <TableHead className="text-right">Sisa</TableHead>
@@ -167,37 +195,101 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                 <TableBody>
                   {transactions.map((transaction) => {
                     const remaining = transaction.total_amount - transaction.paid_amount
+                    const items = transaction.transaction_items || []
+                    const isExpanded = expandedTransactions.has(transaction.id)
+                    
                     return (
-                      <TableRow key={transaction.id}>
-                        <TableCell className="font-mono text-sm">
-                          {transaction.invoice_number}
-                        </TableCell>
-                        <TableCell>{formatDateTime(transaction.created_at)}</TableCell>
-                        <TableCell className="text-right">
-                          {formatCurrency(transaction.total_amount)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {formatCurrency(transaction.paid_amount)}
-                        </TableCell>
-                        <TableCell className="text-right font-semibold text-red-600">
-                          {remaining > 0 ? formatCurrency(remaining) : "-"}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge 
-                            variant={
-                              transaction.status === 'paid' ? 'default' :
-                              transaction.status === 'partial' ? 'secondary' : 'destructive'
-                            }
-                            className={
-                              transaction.status === 'paid' ? 'bg-green-100 text-green-700' :
-                              transaction.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : ''
-                            }
-                          >
-                            {transaction.status === 'paid' ? 'Lunas' :
-                             transaction.status === 'partial' ? 'Sebagian' : 'Belum Lunas'}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
+                      <React.Fragment key={transaction.id}>
+                        <TableRow>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => toggleExpanded(transaction.id)}
+                            >
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </TableCell>
+                          <TableCell className="font-mono text-sm">
+                            {transaction.invoice_number}
+                          </TableCell>
+                          <TableCell>{formatDateTime(transaction.created_at)}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1 text-gray-600">
+                              <Package className="h-4 w-4" />
+                              <span className="text-sm">{items.length} item</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {formatCurrency(transaction.total_amount)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {formatCurrency(transaction.paid_amount)}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-red-600">
+                            {remaining > 0 ? formatCurrency(remaining) : "-"}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge 
+                              variant={
+                                transaction.status === 'paid' ? 'default' :
+                                transaction.status === 'partial' ? 'secondary' : 'destructive'
+                              }
+                              className={
+                                transaction.status === 'paid' ? 'bg-green-100 text-green-700' :
+                                transaction.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : ''
+                              }
+                            >
+                              {transaction.status === 'paid' ? 'Lunas' :
+                               transaction.status === 'partial' ? 'Sebagian' : 'Belum Lunas'}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                        {isExpanded && items.length > 0 && (
+                          <TableRow key={`${transaction.id}-items`} className="bg-gray-50">
+                            <TableCell colSpan={8} className="p-0">
+                              <div className="px-12 py-4">
+                                <p className="text-sm font-semibold text-gray-700 mb-3">Detail Barang:</p>
+                                <div className="bg-white rounded-lg border">
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow>
+                                        <TableHead className="text-xs">Nama Produk</TableHead>
+                                        <TableHead className="text-xs text-center">Jumlah</TableHead>
+                                        <TableHead className="text-xs text-right">Harga Satuan</TableHead>
+                                        <TableHead className="text-xs text-right">Subtotal</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {items.map((item) => (
+                                        <TableRow key={item.id}>
+                                          <TableCell className="text-sm">
+                                            {item.products?.name || 'Unknown'}
+                                          </TableCell>
+                                          <TableCell className="text-sm text-center">
+                                            {item.quantity}
+                                          </TableCell>
+                                          <TableCell className="text-sm text-right">
+                                            {formatCurrency(item.unit_price)}
+                                          </TableCell>
+                                          <TableCell className="text-sm text-right font-semibold">
+                                            {formatCurrency(item.subtotal)}
+                                          </TableCell>
+                                        </TableRow>
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </React.Fragment>
                     )
                   })}
                 </TableBody>
