@@ -2,7 +2,7 @@
 
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { Product } from './types'
+import { Product, StockEntry } from './types'
 import { formatCurrency } from './utils'
 
 export function exportStockToPDF(products: Product[]) {
@@ -310,5 +310,110 @@ export function exportSalesReportToPDF(data: SalesReportData) {
   
   // Save
   const fileName = `Laporan-Penjualan-BUMDESMA-${now.toISOString().split('T')[0]}.pdf`
+  doc.save(fileName)
+}
+
+// Export stock entries to PDF
+export function exportStockEntriesReportToPDF(data: {
+  entries: StockEntry[]
+  totalValue: number
+  periodLabel: string
+}) {
+  const doc = new jsPDF()
+  
+  // Header
+  doc.setFontSize(18)
+  doc.setFont('helvetica', 'bold')
+  doc.text('BUMDESMA', 105, 15, { align: 'center' })
+  
+  doc.setFontSize(14)
+  doc.setFont('helvetica', 'normal')
+  doc.text('Laporan Riwayat Stok Masuk', 105, 23, { align: 'center' })
+  
+  // Period & Date
+  doc.setFontSize(10)
+  const now = new Date()
+  const dateStr = now.toLocaleDateString('id-ID', { 
+    weekday: 'long', 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+  doc.text(`Periode: ${data.periodLabel}`, 14, 35)
+  doc.text(`Tanggal Cetak: ${dateStr}`, 14, 41)
+  
+  // Summary
+  doc.setFontSize(12)
+  doc.setFont('helvetica', 'bold')
+  doc.text(`Total Nilai Pembelian: ${formatCurrency(data.totalValue)}`, 14, 50)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(10)
+  doc.text(`Jumlah Entri: ${data.entries.length} baris`, 14, 57)
+  
+  // Table
+  const tableData = data.entries.map((entry, index) => {
+    // Get sell price from joined batches if available
+    const sellPrice = entry.stock_batches?.[0]?.sell_price
+    
+    return [
+      (index + 1).toString(),
+      new Date(entry.created_at).toLocaleDateString('id-ID'),
+      entry.products?.name || 'Unknown',
+      entry.users?.name || 'System',
+      entry.quantity.toString(),
+      formatCurrency(entry.purchase_price),
+      sellPrice ? formatCurrency(sellPrice) : '-',
+      formatCurrency(entry.purchase_price * entry.quantity),
+      entry.notes || '-'
+    ]
+  })
+  
+  autoTable(doc, {
+    startY: 65,
+    head: [['No', 'Tanggal', 'Produk', 'User', 'Qty', 'Harga Beli', 'Harga Jual', 'Total', 'Catatan']],
+    body: tableData,
+    styles: {
+      fontSize: 8,
+      cellPadding: 3,
+    },
+    headStyles: {
+      fillColor: [30, 64, 175], // Blue color
+      textColor: 255,
+      fontStyle: 'bold',
+    },
+    alternateRowStyles: {
+      fillColor: [240, 249, 255],
+    },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 8 },
+      1: { cellWidth: 20 }, // Tanggal
+      2: { cellWidth: 35 }, // Produk
+      3: { cellWidth: 20 }, // User
+      4: { halign: 'center', cellWidth: 10 }, // Qty
+      5: { halign: 'right', cellWidth: 22 }, // Beli
+      6: { halign: 'right', cellWidth: 22 }, // Jual
+      7: { halign: 'right', cellWidth: 22 }, // Total
+      8: { cellWidth: 'auto' }, // Catatan
+    },
+  })
+  
+  // Footer
+  const pageCount = doc.getNumberOfPages()
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i)
+    doc.setFontSize(8)
+    doc.setTextColor(128)
+    doc.text(
+      `Halaman ${i} dari ${pageCount} - BUMDESMA POS`,
+      105,
+      doc.internal.pageSize.height - 10,
+      { align: 'center' }
+    )
+  }
+  
+  // Save
+  const fileName = `Laporan-Stok-Masuk-${now.toISOString().split('T')[0]}.pdf`
   doc.save(fileName)
 }

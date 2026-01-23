@@ -55,6 +55,8 @@ export interface TransactionItem {
   quantity: number
   unit_price: number
   subtotal: number
+  cost_of_goods?: number
+  profit?: number
   // Joined fields
   product?: Product
 }
@@ -68,6 +70,42 @@ export interface Payment {
   created_at: string
   // Joined fields
   received_by_user?: User
+}
+
+export interface StockBatch {
+  id: string
+  product_id: string
+  stock_entry_id: string | null
+  purchase_price: number
+  sell_price?: number | null
+  quantity_initial: number
+  quantity_remaining: number
+  batch_date: string
+  created_at: string
+}
+
+export interface StockBatchUsage {
+  id: string
+  transaction_item_id: string
+  stock_batch_id: string
+  quantity_used: number
+  unit_cost: number
+  created_at: string
+}
+
+
+export interface StockEntry {
+  id: string
+  product_id: string
+  quantity: number
+  purchase_price: number
+  notes: string | null
+  created_by: string | null
+  created_at: string
+  // Joined fields
+  products?: Product
+  users?: User
+  stock_batches?: StockBatch[]
 }
 
 // Cart types for POS

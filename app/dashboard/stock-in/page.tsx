@@ -4,6 +4,8 @@ import { useEffect, useState } from "react"
 import { useSession } from "next-auth/react"
 import { supabase } from "@/lib/supabase"
 import { formatCurrency, formatDateTime } from "@/lib/utils"
+import { exportStockEntriesReportToPDF } from "@/lib/pdf-export"
+import { StockEntry } from "@/lib/types"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -32,24 +34,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { PackagePlus, Loader2, Plus, Package, History, Search, Trash2 } from "lucide-react"
+import { PackagePlus, Loader2, Plus, Package, History, Search, Trash2, Download } from "lucide-react"
 
 interface Product {
   id: string
   name: string
   stock: number
   category: string
+  sell_price: number
 }
 
-interface StockEntry {
-  id: string
-  quantity: number
-  purchase_price: number
-  notes: string | null
-  created_at: string
-  products: { name: string } | null
-  users: { name: string } | null
-}
+
 
 export default function StockInPage() {
   const { data: session } = useSession()
@@ -63,6 +58,7 @@ export default function StockInPage() {
   const [selectedProductId, setSelectedProductId] = useState("")
   const [quantity, setQuantity] = useState("")
   const [purchasePrice, setPurchasePrice] = useState("")
+  const [sellPrice, setSellPrice] = useState("")
   const [notes, setNotes] = useState("")
   
   // Product search
@@ -95,7 +91,7 @@ export default function StockInPage() {
       // Fetch products
       const { data: productsData, error: productsError } = await supabase
         .from('products')
-        .select('id, name, stock, category')
+        .select('id, name, stock, category, sell_price')
         .order('name')
 
       console.log('Products fetch result:', { 
@@ -115,7 +111,7 @@ export default function StockInPage() {
       try {
         const { data: entriesData, error: entriesError } = await supabase
           .from('stock_entries')
-          .select('*, products(name), users(name)')
+          .select('*, products(name), users(name), stock_batches(sell_price)')
           .order('created_at', { ascending: false })
           .limit(100)
 
@@ -158,18 +154,44 @@ export default function StockInPage() {
         return
       }
 
+      const price = purchasePrice ? parseFloat(purchasePrice) : 0
+      const sellPriceValue = sellPrice ? parseFloat(sellPrice) : null
+
       // Insert stock entry
-      const { error: entryError } = await supabase
+      const { data: entryData, error: entryError } = await supabase
         .from('stock_entries')
         .insert({
           product_id: selectedProductId,
           quantity: qty,
-          purchase_price: purchasePrice ? parseFloat(purchasePrice) : 0,
+          purchase_price: price,
           notes: notes || null,
           created_by: (session?.user as { id?: string })?.id || null
         })
+        .select('id')
+        .single()
 
       if (entryError) throw entryError
+
+      // Create stock batch for FIFO tracking
+      const { error: batchError } = await supabase
+        .from('stock_batches')
+        .insert({
+          product_id: selectedProductId,
+          stock_entry_id: entryData.id,
+          purchase_price: price,
+          sell_price: sellPriceValue,
+          quantity_initial: qty,
+          quantity_remaining: qty,
+          batch_date: new Date().toISOString()
+        })
+
+      if (batchError) {
+        console.error('Error creating batch:', batchError)
+        console.error('Error details:', JSON.stringify(batchError, null, 2))
+        // Don't throw - batch creation is supplementary
+        const errorMsg = batchError.message || batchError.hint || 'Unknown error'
+        toast.error(`Stok berhasil ditambah tapi batch tracking gagal: ${errorMsg}`)
+      }
 
       // Update product stock
       const newStock = selectedProduct.stock + qty
@@ -186,6 +208,7 @@ export default function StockInPage() {
       setSelectedProductId("")
       setQuantity("")
       setPurchasePrice("")
+      setSellPrice("")
       setNotes("")
       setDialogOpen(false)
       
@@ -362,6 +385,30 @@ export default function StockInPage() {
               </div>
 
               <div className="space-y-2">
+                <Label htmlFor="sellPrice">
+                  Harga Jual per Unit (Opsional)
+                  {selectedProduct && (
+                    <span className="text-xs text-gray-500 ml-1">
+                      Default: {formatCurrency(selectedProduct.sell_price)}
+                    </span>
+                  )}
+                </Label>
+                <Input
+                  id="sellPrice"
+                  type="number"
+                  min="0"
+                  value={sellPrice}
+                  onChange={(e) => setSellPrice(e.target.value)}
+                  placeholder={selectedProduct ? `Default: ${formatCurrency(selectedProduct.sell_price)}` : "Rp 0"}
+                />
+                {!sellPrice && selectedProduct && (
+                  <p className="text-xs text-gray-500">
+                    Kosongkan untuk menggunakan harga default produk
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="notes">Catatan (Opsional)</Label>
                 <Textarea
                   id="notes"
@@ -466,6 +513,22 @@ export default function StockInPage() {
                 ))}
               </SelectContent>
             </Select>
+            <Button
+              variant="outline"
+              onClick={() => {
+                const totalValue = filteredEntries.reduce((sum, e) => sum + (e.purchase_price * e.quantity), 0)
+                const periodLabel = "Semua Riwayat" // Custom period logic could be added later
+                
+                exportStockEntriesReportToPDF({
+                  entries: filteredEntries,
+                  totalValue,
+                  periodLabel
+                })
+              }}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export PDF
+            </Button>
           </div>
         </CardHeader>
         <CardContent>

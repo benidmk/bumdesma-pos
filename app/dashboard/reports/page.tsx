@@ -37,17 +37,19 @@ interface TransactionWithItems {
   id: string
   invoice_number: string
   customer_name: string
-  items: Array<{ name: string; quantity: number; subtotal: number }>
+  items: Array<{ name: string; quantity: number; subtotal: number; profit?: number }>
   total_amount: number
   paid_amount: number
   status: string
   created_at: string
+  total_profit?: number
 }
 
 interface ReportData {
   totalSales: number
   totalPayments: number
   totalOutstanding: number
+  totalProfit: number
   transactionCount: number
   topProducts: Array<{ name: string; quantity: number; revenue: number }>
   recentTransactions: TransactionWithItems[]
@@ -80,7 +82,7 @@ export default function ReportsPage() {
       // Fetch transactions with transaction_items
       let transactionQuery = supabase
         .from('transactions')
-        .select('*, customers(name), transaction_items(quantity, subtotal, products(name))')
+        .select('*, customers(name), transaction_items(quantity, subtotal, profit, products(name))')
         .order('created_at', { ascending: false })
 
       if (dateFilter) {
@@ -135,26 +137,37 @@ export default function ReportsPage() {
         const customerData = tx.customers as any
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const txItems = (tx.transaction_items as any[]) || []
+        
+        const items = txItems.map((item: { quantity: number; subtotal: number; profit?: number; products: { name: string } | null }) => ({
+          name: item.products?.name || 'Unknown',
+          quantity: item.quantity,
+          subtotal: item.subtotal,
+          profit: item.profit || 0
+        }))
+        
+        const totalProfit = items.reduce((sum, item) => sum + (item.profit || 0), 0)
+        
         return {
           id: tx.id,
           invoice_number: tx.invoice_number,
           customer_name: customerData?.name || 'Unknown',
-          items: txItems.map((item: { quantity: number; subtotal: number; products: { name: string } | null }) => ({
-            name: item.products?.name || 'Unknown',
-            quantity: item.quantity,
-            subtotal: item.subtotal
-          })),
+          items,
           total_amount: tx.total_amount,
           paid_amount: tx.paid_amount,
           status: tx.status,
-          created_at: tx.created_at
+          created_at: tx.created_at,
+          total_profit: totalProfit
         }
       })
+
+      // Calculate total profit
+      const totalProfit = allTransactions.reduce((sum, tx) => sum + (tx.total_profit || 0), 0)
 
       setData({
         totalSales,
         totalPayments,
         totalOutstanding,
+        totalProfit,
         transactionCount: transactions?.length || 0,
         topProducts,
         recentTransactions: allTransactions.slice(0, 10),
@@ -221,13 +234,15 @@ export default function ReportsPage() {
       </div>
 
       {/* Metric Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="border-l-4 border-l-blue-500">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-gray-600">
               Total Penjualan
             </CardTitle>
-            <TrendingUp className="h-5 w-5 text-blue-500" />
+            <div className="p-2 rounded-full bg-blue-100">
+              <TrendingUp className="h-4 w-4 text-blue-600" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-gray-900">
@@ -239,12 +254,14 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-green-500">
+        <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-gray-600">
               Total Pembayaran
             </CardTitle>
-            <DollarSign className="h-5 w-5 text-green-500" />
+            <div className="p-2 rounded-full bg-green-100">
+              <DollarSign className="h-4 w-4 text-green-600" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
@@ -256,12 +273,14 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-red-500">
+        <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-gray-600">
               Piutang Tertunggak
             </CardTitle>
-            <TrendingDown className="h-5 w-5 text-red-500" />
+            <div className="p-2 rounded-full bg-red-100">
+              <TrendingDown className="h-4 w-4 text-red-600" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">
@@ -273,12 +292,33 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-purple-500">
+        <Card className="hover:shadow-md transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Total Profit
+            </CardTitle>
+            <div className="p-2 rounded-full bg-emerald-100">
+              <TrendingUp className="h-4 w-4 text-emerald-600" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-emerald-600">
+              {formatCurrency(data?.totalProfit || 0)}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Laba bersih dari penjualan
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-gray-600">
               Rasio Pelunasan
             </CardTitle>
-            <BarChart3 className="h-5 w-5 text-purple-500" />
+            <div className="p-2 rounded-full bg-purple-100">
+              <BarChart3 className="h-4 w-4 text-purple-600" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-gray-900">

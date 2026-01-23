@@ -143,11 +143,34 @@ export default function ProductsPage() {
         if (error) throw error
         toast.success('Produk berhasil diperbarui')
       } else {
-        const { error } = await supabase
+        const { data: newProduct, error } = await supabase
           .from('products')
           .insert(productData)
+          .select('id')
+          .single()
 
         if (error) throw error
+        
+        // If has stock, create initial batch
+        if (productData.stock > 0 && newProduct) {
+          const { error: batchError } = await supabase
+            .from('stock_batches')
+            .insert({
+              product_id: newProduct.id,
+              stock_entry_id: null,
+              purchase_price: productData.buy_price,
+              sell_price: productData.sell_price,
+              quantity_initial: productData.stock,
+              quantity_remaining: productData.stock,
+              batch_date: new Date().toISOString()
+            })
+            
+          if (batchError) {
+            console.error('Error creating initial batch:', batchError)
+            toast.warning('Produk tersimpan tapi gagal membuat batch stok')
+          }
+        }
+
         toast.success('Produk berhasil ditambahkan')
       }
 

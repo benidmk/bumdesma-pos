@@ -211,23 +211,53 @@ export default function POSPage() {
 
       if (txError) throw txError
 
-      // Create transaction items
-      const transactionItems = cart.map(item => ({
-        transaction_id: transaction.id,
-        product_id: item.product.id,
-        quantity: item.quantity,
-        unit_price: item.product.sell_price,
-        subtotal: item.subtotal
-      }))
+      // Import FIFO utilities
+      const { getAvailableBatches, allocateStock, recordBatchUsage } = await import('@/lib/fifo')
 
-      const { error: itemsError } = await supabase
-        .from('transaction_items')
-        .insert(transactionItems)
-
-      if (itemsError) throw itemsError
-
-      // Update product stock
+      // Process each cart item with FIFO
       for (const item of cart) {
+        // 1. Get available batches for this product (FIFO order)
+        const batches = await getAvailableBatches(item.product.id)
+        
+        // 2. Allocate stock using FIFO with hybrid pricing
+        const allocationResult = allocateStock(
+          batches, 
+          item.quantity,
+          item.product.sell_price // Default sell price as fallback
+        )
+        
+        if (!allocationResult.success) {
+          throw new Error(
+            `FIFO allocation failed for ${item.product.name}: ${allocationResult.error}`
+          )
+        }
+
+        // 3. Use calculated revenue from batches (hybrid pricing)
+        const revenue = allocationResult.totalRevenue
+        const costOfGoods = allocationResult.totalCOGS
+        const profit = revenue - costOfGoods
+
+        // 4. Insert transaction item with actual revenue, COGS and profit
+        const { data: txItem, error: itemError } = await supabase
+          .from('transaction_items')
+          .insert({
+            transaction_id: transaction.id,
+            product_id: item.product.id,
+            quantity: item.quantity,
+            unit_price: revenue / item.quantity, // Average sell price from batches
+            subtotal: revenue,
+            cost_of_goods: costOfGoods,
+            profit: profit
+          })
+          .select('id')
+          .single()
+
+        if (itemError) throw itemError
+
+        // 5. Record batch usage and update batch quantities
+        await recordBatchUsage(txItem.id, allocationResult.allocations)
+
+        // 6. Update product stock
         const { error: stockError } = await supabase
           .from('products')
           .update({ stock: item.product.stock - item.quantity })
@@ -261,7 +291,7 @@ export default function POSPage() {
       toast.success('Transaksi berhasil disimpan sebagai piutang')
     } catch (error) {
       console.error('Error during checkout:', error)
-      toast.error('Gagal menyimpan transaksi')
+      toast.error('Gagal menyimpan transaksi: ' + (error as Error).message)
     } finally {
       setIsCheckingOut(false)
     }
